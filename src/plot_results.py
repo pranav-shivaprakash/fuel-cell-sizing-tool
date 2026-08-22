@@ -76,11 +76,9 @@ def sweep_mission_duration(cruise_powers_w, cruise_hours_list):
     rows = []
     for hours in cruise_hours_list:
         phases = [
-            {"name": "takeoff", "duration_hours": 0.05, "power_w": 4000},
-            {"name": "climb", "duration_hours": 0.15, "power_w": 2500},
+            {"name": "takeoff", "duration_hours": 1.25 / 60, "power_w": 60 * 22.2},
             {"name": "cruise", "duration_hours": hours, "power_w": cruise_powers_w},
-            {"name": "descent", "duration_hours": 0.1, "power_w": 600},
-            {"name": "landing", "duration_hours": 0.05, "power_w": 3000},
+            {"name": "landing", "duration_hours": 1.0 / 60, "power_w": 27.5 * 22.2},
         ]
         mission = multi_phase_mission(phases)
         peak_power_w = mission_peak_power_w(mission)
@@ -122,13 +120,11 @@ def plot_duration_tradeoff(df, save_path="duration_tradeoff.png"):
 
 
 if __name__ == "__main__":
-    # Base mission for the stack fraction sweep
+    # Real mission: Evolonic VTOL UAV fuel cell retrofit thesis
     phases = [
-        {"name": "takeoff", "duration_hours": 0.05, "power_w": 4000},
-        {"name": "climb", "duration_hours": 0.15, "power_w": 2500},
-        {"name": "cruise", "duration_hours": 3.0, "power_w": 1200},
-        {"name": "descent", "duration_hours": 0.1, "power_w": 600},
-        {"name": "landing", "duration_hours": 0.05, "power_w": 3000},
+        {"name": "takeoff", "duration_hours": 1.25 / 60, "power_w": 60 * 22.2},
+        {"name": "cruise", "duration_hours": 59.5 / 60, "power_w": 10 * 22.2},
+        {"name": "landing", "duration_hours": 1.0 / 60, "power_w": 27.5 * 22.2},
     ]
     mission = multi_phase_mission(phases)
     peak_power_w = mission_peak_power_w(mission)
@@ -139,5 +135,7 @@ if __name__ == "__main__":
     plot_stack_fraction_tradeoff(df_stack, save_path="notebooks/stack_fraction_tradeoff.png")
 
     print("\n=== Sweep 2: Mission duration scaling ===")
-    df_duration = sweep_mission_duration(cruise_powers_w=1200, cruise_hours_list=np.arange(0.5, 8.5, 0.5))
+    # Using the real cruise power (222W = 10A x 22.2V); sweeping cruise duration
+    # from 30 min to 4 hours to see how far this system could fly with a bigger tank
+    df_duration = sweep_mission_duration(cruise_powers_w=222, cruise_hours_list=np.arange(0.5, 4.5, 0.5))
     plot_duration_tradeoff(df_duration, save_path="notebooks/duration_tradeoff.png")
