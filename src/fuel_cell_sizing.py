@@ -110,7 +110,7 @@ def size_hydrogen_tank(total_energy_wh, system_efficiency=0.5):
 
 def size_battery_only_system(peak_power_w, total_energy_wh,
                               battery_specific_power_w_per_kg=2000,
-                              battery_specific_energy_wh_per_kg=200):
+                              battery_specific_energy_wh_per_kg=188):
     """
     Size a pure battery-powered system covering the same mission, for
     comparison against the hydrogen fuel cell system.
@@ -129,7 +129,9 @@ def size_battery_only_system(peak_power_w, total_energy_wh,
     battery_specific_power_w_per_kg : float
         Battery specific power (W/kg).
     battery_specific_energy_wh_per_kg : float
-        Battery specific energy (Wh/kg). Typical high-energy Li-ion: 150-250 Wh/kg.
+        Battery specific energy (Wh/kg). Default 188 Wh/kg matches the
+        measured 6S1P 16000mAh 22.2V pack (355.2 Wh / 1.89 kg) used as
+        the baseline battery-only system for comparison.
 
     Returns
     -------
@@ -151,47 +153,74 @@ def size_full_system(peak_power_w, total_energy_wh,
                       battery_specific_power_w_per_kg=2000,
                       stack_fraction_of_peak=0.6,
                       buffer_duration_s=120,
-                      system_efficiency=0.5):
+                      system_efficiency=0.5,
+                      bop_fraction_of_stack=0.5,
+                      mass_budget_kg=None):
     """
     Run the full sizing pipeline and return a summary of all components
     plus total system mass.
+
+    Parameters
+    ----------
+    bop_fraction_of_stack : float
+        Balance-of-plant mass (power electronics, DC/DC converter, valves,
+        wiring, hoses, fittings) as a fraction of stack mass. 0.5 is a
+        commonly cited first-order estimate for small PEM systems where
+        BOP is not yet component-specified; refine with real component
+        datasheets (DC/DC converter, wiring gauge/length, hose fittings)
+        as the design matures.
+    mass_budget_kg : float or None
+        If given, the result includes a check of whether the sized
+        system fits within this mass budget.
     """
     stack = size_fuel_cell_stack(peak_power_w, fc_specific_power_w_per_kg, stack_fraction_of_peak)
     battery = size_battery_buffer(peak_power_w, stack["stack_power_w"],
                                    battery_specific_power_w_per_kg, buffer_duration_s)
     tank = size_hydrogen_tank(total_energy_wh, system_efficiency)
+    bop_mass_kg = stack["stack_mass_kg"] * bop_fraction_of_stack
 
-    total_mass_kg = stack["stack_mass_kg"] + battery["battery_mass_kg"] + tank["tank_system_mass_kg"]
+    total_mass_kg = (stack["stack_mass_kg"] + battery["battery_mass_kg"]
+                      + tank["tank_system_mass_kg"] + bop_mass_kg)
 
-    return {
+    result = {
         "fuel_cell_stack_power_w": stack["stack_power_w"],
         "fuel_cell_stack_mass_kg": stack["stack_mass_kg"],
         "battery_buffer_power_w": battery["buffer_power_w"],
         "battery_mass_kg": battery["battery_mass_kg"],
         "hydrogen_mass_kg": tank["h2_mass_kg"],
         "tank_system_mass_kg": tank["tank_system_mass_kg"],
+        "balance_of_plant_mass_kg": bop_mass_kg,
         "total_system_mass_kg": total_mass_kg,
     }
 
+    if mass_budget_kg is not None:
+        result["mass_budget_kg"] = mass_budget_kg
+        result["within_budget"] = total_mass_kg <= mass_budget_kg
+        result["margin_kg"] = mass_budget_kg - total_mass_kg
+
+    return result
+
 
 if __name__ == "__main__":
-    # Example: size a system for the mission profile we built earlier
+    # Real mission: Evolonic VTOL UAV fuel cell retrofit thesis
     from mission_profile import multi_phase_mission, mission_energy_wh, mission_peak_power_w
 
     phases = [
-        {"name": "takeoff", "duration_hours": 0.05, "power_w": 4000},
-        {"name": "climb", "duration_hours": 0.15, "power_w": 2500},
-        {"name": "cruise", "duration_hours": 3.0, "power_w": 1200},
-        {"name": "descent", "duration_hours": 0.1, "power_w": 600},
-        {"name": "landing", "duration_hours": 0.05, "power_w": 3000},
+        {"name": "takeoff", "duration_hours": 1.25 / 60, "power_w": 60 * 22.2},
+        {"name": "cruise", "duration_hours": 59.5 / 60, "power_w": 10 * 22.2},
+        {"name": "landing", "duration_hours": 1.0 / 60, "power_w": 27.5 * 22.2},
     ]
     mission = multi_phase_mission(phases)
 
     peak_power_w = mission_peak_power_w(mission)
     total_energy_wh = mission_energy_wh(mission)
 
-    result = size_full_system(peak_power_w, total_energy_wh)
+    # Check against a 3.5 kg target (midpoint of the 3-4 kg budget)
+    result = size_full_system(peak_power_w, total_energy_wh, mass_budget_kg=3.5)
 
-    print("--- Fuel Cell System Sizing Results ---")
+    print("--- Fuel Cell System Sizing Results (Evolonic VTOL UAV) ---")
     for key, value in result.items():
-        print(f"{key:28s}: {value:10.2f}")
+        if isinstance(value, bool):
+            print(f"{key:28s}: {value}")
+        else:
+            print(f"{key:28s}: {value:10.2f}")

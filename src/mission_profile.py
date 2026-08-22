@@ -96,19 +96,19 @@ def mission_peak_power_w(mission_df):
 
 
 if __name__ == "__main__":
-    # Example: a simple long-range UAV mission
+    # Real mission profile: Evolonic VTOL UAV fuel cell retrofit thesis
+    # Based on measured flight data: 22.2V system, 60A takeoff/landing draw,
+    # 10A cruise draw, ~62 min total flight time, 65.69 km distance
     phases = [
-        {"name": "takeoff", "duration_hours": 0.05, "power_w": 4000},
-        {"name": "climb", "duration_hours": 0.15, "power_w": 2500},
-        {"name": "cruise", "duration_hours": 3.0, "power_w": 1200},
-        {"name": "descent", "duration_hours": 0.1, "power_w": 600},
-        {"name": "landing", "duration_hours": 0.05, "power_w": 3000},
+        {"name": "takeoff", "duration_hours": 1.25 / 60, "power_w": 60 * 22.2},    # 1332 W
+        {"name": "cruise", "duration_hours": 59.5 / 60, "power_w": 10 * 22.2},     # 222 W
+        {"name": "landing", "duration_hours": 1.0 / 60, "power_w": 27.5 * 22.2},   # 611 W (avg of 25-30A)
     ]
 
     mission = multi_phase_mission(phases)
 
     print(mission.groupby("phase")["power_w"].agg(["mean", "count"]))
-    print(f"\nTotal mission duration: {mission['time_s'].max() / 3600:.2f} hours")
+    print(f"\nTotal mission duration: {mission['time_s'].max() / 3600 * 60:.2f} minutes")
     print(f"Total energy required:  {mission_energy_wh(mission):.1f} Wh")
     print(f"Peak power demand:      {mission_peak_power_w(mission):.0f} W")
 
