@@ -1,0 +1,173 @@
+"""
+Fuel Cell Candidate Comparison
+---------------------------------
+Runs the sizing tool once per fuel cell profile (real datasheet specs)
+against the actual UAV mission, and compares results -- including a
+check on whether the sizing choice is actually achievable given each
+product's rated power limit.
+
+Usage:
+    python3 compare_fuel_cells.py                  # compares all profiles
+    python3 compare_fuel_cells.py horizon_fcs_ul500 # view one profile only
+    python3 compare_fuel_cells.py ie_s800           # view one profile only
+"""
+
+import sys
+import matplotlib.pyplot as plt
+
+from mission_profile import multi_phase_mission, mission_energy_wh, mission_peak_power_w
+from fuel_cell_sizing import size_full_system
+from fuel_cell_profiles import FUEL_CELL_PROFILES, get_profile
+from cylinder_profiles import CYLINDER_PROFILES, get_cylinder
+
+
+def get_real_mission():
+    """The real Evolonic VTOL UAV mission: takeoff/cruise/landing at measured current draws."""
+    phases = [
+        {"name": "takeoff", "duration_hours": 1.25 / 60, "power_w": 60 * 22.2},
+        {"name": "cruise", "duration_hours": 59.5 / 60, "power_w": 10 * 22.2},
+        {"name": "landing", "duration_hours": 1.0 / 60, "power_w": 27.5 * 22.2},
+    ]
+    return multi_phase_mission(phases)
+
+
+def size_with_profile(profile_key, peak_power_w, total_energy_wh,
+                       stack_fraction_of_peak=0.6, mass_budget_kg=3.5,
+                       use_rated_power_cap=False, num_units=1,
+                       label_suffix="", cylinder_key=None):
+    """
+    Run the sizing tool using a specific fuel cell's real specs.
+
+    Parameters
+    ----------
+    use_rated_power_cap : bool
+        If True, caps the fuel cell's power output at its real rated power
+        (x num_units) instead of deriving it from stack_fraction_of_peak.
+        Use this when modelling a specific real product's hard limit
+        (e.g. a single UL500 can't be pushed past 500W no matter what
+        stack_fraction_of_peak implies).
+    num_units : int
+        Number of this fuel cell used in parallel.
+    label_suffix : str
+        Extra text appended to the result's display name, to distinguish
+        multiple configurations of the same underlying product.
+    cylinder_key : str or None
+        If given, a key from cylinder_profiles.CYLINDER_PROFILES -- sizes
+        hydrogen storage against this real cylinder instead of the
+        generic gravimetric-fraction assumption.
+    """
+    profile = get_profile(profile_key)
+    cylinder_profile = get_cylinder(cylinder_key) if cylinder_key else None
+
+    result = size_full_system(
+        peak_power_w, total_energy_wh,
+        fc_specific_power_w_per_kg=profile["specific_power_w_per_kg"],
+        system_efficiency=profile["system_efficiency"],
+        stack_fraction_of_peak=stack_fraction_of_peak,
+        bop_fraction_of_stack=profile.get("bop_fraction_of_stack", 0.5),
+        mass_budget_kg=mass_budget_kg,
+        rated_power_w=profile["rated_power_w"] if use_rated_power_cap else None,
+        num_units=num_units,
+        cylinder_profile=cylinder_profile,
+    )
+
+    result["fuel_cell_name"] = profile["name"] + label_suffix
+    result["rated_power_w"] = profile["rated_power_w"] * num_units
+    result["exceeds_rated_power"] = result["fuel_cell_stack_power_w"] > result["rated_power_w"]
+
+    return result
+
+
+def print_result(result):
+    print(f"\n--- {result['fuel_cell_name']} ---")
+    print(f"Fuel cell stack power required: {result['fuel_cell_stack_power_w']:.1f} W "
+          f"(rated: {result['rated_power_w']} W)")
+    if result["exceeds_rated_power"]:
+        print(f"  *** WARNING: required stack power EXCEEDS this product's rated power. ***")
+        print(f"      Lower stack_fraction_of_peak, or this product cannot cover this mission alone.")
+    print(f"Fuel cell stack mass:    {result['fuel_cell_stack_mass_kg']:.3f} kg")
+    print(f"Battery buffer power:    {result['battery_buffer_power_w']:.1f} W")
+    print(f"Battery buffer mass:     {result['battery_mass_kg']:.3f} kg")
+    print(f"Hydrogen mass needed:    {result['hydrogen_mass_kg']*1000:.1f} g")
+    if "num_cylinders" in result:
+        print(f"Cylinder:                {result['num_cylinders']}x {result['cylinder_name']}")
+    print(f"Hydrogen + tank mass:    {result['tank_system_mass_kg']:.3f} kg")
+    print(f"Balance of plant mass:   {result['balance_of_plant_mass_kg']:.3f} kg")
+    print(f"TOTAL SYSTEM MASS:       {result['total_system_mass_kg']:.3f} kg")
+    if "mass_budget_kg" in result:
+        status = "WITHIN BUDGET" if result["within_budget"] else "OVER BUDGET"
+        print(f"Mass budget check:       {status} (margin: {result['margin_kg']:.3f} kg)")
+
+
+def plot_comparison(results, save_path="notebooks/fuel_cell_comparison.png"):
+    """Bar chart comparing battery buffer mass and total mass across fuel cell candidates."""
+    names = [r["fuel_cell_name"] for r in results]
+    stack_mass = [r["fuel_cell_stack_mass_kg"] for r in results]
+    battery_mass = [r["battery_mass_kg"] for r in results]
+    tank_mass = [r["tank_system_mass_kg"] for r in results]
+    bop_mass = [r["balance_of_plant_mass_kg"] for r in results]
+
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    x = range(len(names))
+
+    bottom = [0] * len(names)
+    for values, label in [(stack_mass, "Fuel cell stack"), (battery_mass, "Battery buffer"),
+                           (tank_mass, "Hydrogen + tank"), (bop_mass, "Balance of plant")]:
+        ax.bar(x, values, bottom=bottom, label=label)
+        bottom = [b + v for b, v in zip(bottom, values)]
+
+    for i, total in enumerate(bottom):
+        ax.text(i, total + 0.05, f"{total:.2f} kg", ha="center", fontweight="bold")
+
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(names)
+    ax.set_ylabel("Mass (kg)")
+    ax.set_title("Fuel Cell Candidate Comparison: System Mass Breakdown")
+    ax.legend()
+    ax.grid(alpha=0.3, axis="y")
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    print(f"\nSaved comparison chart to {save_path}")
+    plt.close(fig)
+
+
+if __name__ == "__main__":
+    mission = get_real_mission()
+    peak_power_w = mission_peak_power_w(mission)
+    total_energy_wh = mission_energy_wh(mission)
+
+    print(f"Mission peak power: {peak_power_w:.1f} W | Total energy: {total_energy_wh:.1f} Wh\n")
+
+    results = []
+
+    # Config 1: single UL500, capped at its real 500W rating -> bigger battery buffer covers the rest
+    result_1 = size_with_profile(
+        "horizon_fcs_ul500", peak_power_w, total_energy_wh,
+        use_rated_power_cap=True, num_units=1,
+        label_suffix=" (1x, rated-power capped)",
+        cylinder_key="xfiber_s2", mass_budget_kg=4.0,
+    )
+    print_result(result_1)
+    results.append(result_1)
+
+    # Config 2: two UL500s in parallel, capped at 2x500W = 1000W combined
+    result_2 = size_with_profile(
+        "horizon_fcs_ul500", peak_power_w, total_energy_wh,
+        use_rated_power_cap=True, num_units=2,
+        label_suffix=" (2x parallel)",
+        cylinder_key="xfiber_s2", mass_budget_kg=4.0,
+    )
+    print_result(result_2)
+    results.append(result_2)
+
+    # Config 3: IE S800, capped at its real 800W rating
+    result_3 = size_with_profile(
+        "ie_s800", peak_power_w, total_energy_wh,
+        use_rated_power_cap=True, num_units=1,
+        label_suffix=" (1x, rated-power capped)",
+        cylinder_key="xfiber_s2", mass_budget_kg=4.0,
+    )
+    print_result(result_3)
+    results.append(result_3)
+
+    plot_comparison(results, save_path="notebooks/fuel_cell_comparison.png")
