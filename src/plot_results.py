@@ -132,10 +132,10 @@ if __name__ == "__main__":
 
     print("=== Sweep 1: Fuel cell stack sizing trade-off ===")
     df_stack = sweep_stack_fraction(peak_power_w, total_energy_wh)
-    plot_stack_fraction_tradeoff(df_stack, save_path="notebooks/stack_fraction_tradeoff.png")
+    plot_stack_fraction_tradeoff(df_stack, save_path="../notebooks/stack_fraction_tradeoff.png")
 
     print("\n=== Sweep 2: Mission duration scaling ===")
     # Using the real cruise power (222W = 10A x 22.2V); sweeping cruise duration
     # from 30 min to 4 hours to see how far this system could fly with a bigger tank
     df_duration = sweep_mission_duration(cruise_powers_w=222, cruise_hours_list=np.arange(0.5, 4.5, 0.5))
-    plot_duration_tradeoff(df_duration, save_path="notebooks/duration_tradeoff.png")
+    plot_duration_tradeoff(df_duration, save_path="../notebooks/duration_tradeoff.png")

@@ -128,7 +128,7 @@ def print_result(result):
         print(f"Mass budget check:       {status} (margin: {result['margin_kg']:.3f} kg)")
 
 
-def plot_comparison(results, save_path="notebooks/fuel_cell_comparison.png"):
+def plot_comparison(results, save_path="../notebooks/fuel_cell_comparison.png"):
     """Bar chart comparing battery buffer mass and total mass across fuel cell candidates."""
     names = [r["fuel_cell_name"] for r in results]
     stack_mass = [r["fuel_cell_stack_mass_kg"] for r in results]
@@ -136,7 +136,7 @@ def plot_comparison(results, save_path="notebooks/fuel_cell_comparison.png"):
     tank_mass = [r["tank_system_mass_kg"] for r in results]
     bop_mass = [r["balance_of_plant_mass_kg"] for r in results]
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(14, 8))
     x = range(len(names))
 
     bottom = [0] * len(names)
@@ -151,13 +151,15 @@ def plot_comparison(results, save_path="notebooks/fuel_cell_comparison.png"):
     ax.set_ylim(0, max(bottom) * 1.15)
 
     ax.set_xticks(list(x))
-    ax.set_xticklabels(names, rotation=15, ha="right", fontsize=9)
+    import textwrap
+    wrapped_names = ["\n".join(textwrap.wrap(n, width=18)) for n in names]
+    ax.set_xticklabels(wrapped_names, fontsize=11)
     ax.set_ylabel("Mass (kg)")
     ax.set_title("Fuel Cell Candidate Comparison: System Mass Breakdown")
     ax.legend()
     ax.grid(alpha=0.3, axis="y")
     fig.tight_layout()
-    fig.savefig(save_path, dpi=150)
+    fig.savefig(save_path, dpi=150, bbox_inches="tight")
     print(f"\nSaved comparison chart to {save_path}")
     plt.close(fig)
 
@@ -201,4 +203,4 @@ if __name__ == "__main__":
     print_result(result_3)
     results.append(result_3)
 
-    plot_comparison(results, save_path="notebooks/fuel_cell_comparison.png")
+    plot_comparison(results, save_path="../notebooks/fuel_cell_comparison.png")
