@@ -19,6 +19,7 @@ from mission_profile import multi_phase_mission, mission_energy_wh, mission_peak
 from fuel_cell_sizing import size_full_system
 from fuel_cell_profiles import FUEL_CELL_PROFILES, get_profile
 from cylinder_profiles import CYLINDER_PROFILES, get_cylinder
+from battery_profiles import BATTERY_PROFILES, get_battery
 
 
 def get_real_mission():
@@ -34,7 +35,7 @@ def get_real_mission():
 def size_with_profile(profile_key, peak_power_w, total_energy_wh,
                        stack_fraction_of_peak=0.6, mass_budget_kg=3.5,
                        use_rated_power_cap=False, num_units=1,
-                       label_suffix="", cylinder_key=None):
+                       label_suffix="", cylinder_key=None, battery_key=None):
     """
     Run the sizing tool using a specific fuel cell's real specs.
 
@@ -55,13 +56,21 @@ def size_with_profile(profile_key, peak_power_w, total_energy_wh,
         If given, a key from cylinder_profiles.CYLINDER_PROFILES -- sizes
         hydrogen storage against this real cylinder instead of the
         generic gravimetric-fraction assumption.
+    battery_key : str or None
+        If given, a key from battery_profiles.BATTERY_PROFILES -- sizes
+        the battery buffer using this real cell's specific power instead
+        of the generic 2000 W/kg default.
     """
     profile = get_profile(profile_key)
     cylinder_profile = get_cylinder(cylinder_key) if cylinder_key else None
+    battery_specific_power_w_per_kg = (
+        get_battery(battery_key)["specific_power_w_per_kg"] if battery_key else 2000
+    )
 
     result = size_full_system(
         peak_power_w, total_energy_wh,
         fc_specific_power_w_per_kg=profile["specific_power_w_per_kg"],
+        battery_specific_power_w_per_kg=battery_specific_power_w_per_kg,
         system_efficiency=profile["system_efficiency"],
         stack_fraction_of_peak=stack_fraction_of_peak,
         bop_fraction_of_stack=profile.get("bop_fraction_of_stack", 0.5),
@@ -74,6 +83,24 @@ def size_with_profile(profile_key, peak_power_w, total_energy_wh,
     result["fuel_cell_name"] = profile["name"] + label_suffix
     result["rated_power_w"] = profile["rated_power_w"] * num_units
     result["exceeds_rated_power"] = result["fuel_cell_stack_power_w"] > result["rated_power_w"]
+
+    if battery_key:
+        import math
+        battery = get_battery(battery_key)
+        num_batteries = max(1, math.ceil(result["battery_buffer_power_w"] / battery["max_continuous_power_w"]))
+        result["num_batteries"] = num_batteries
+        result["battery_name"] = battery["name"]
+        # Recompute battery mass using the real cell's actual mass, not the
+        # generic specific-power-derived estimate, since real cells come in
+        # fixed increments rather than continuously scalable mass.
+        result["battery_mass_kg"] = num_batteries * battery["mass_kg"]
+        result["total_system_mass_kg"] = (
+            result["fuel_cell_stack_mass_kg"] + result["battery_mass_kg"]
+            + result["tank_system_mass_kg"] + result["balance_of_plant_mass_kg"]
+        )
+        if "mass_budget_kg" in result:
+            result["within_budget"] = result["total_system_mass_kg"] <= result["mass_budget_kg"]
+            result["margin_kg"] = result["mass_budget_kg"] - result["total_system_mass_kg"]
 
     return result
 
@@ -88,6 +115,8 @@ def print_result(result):
     print(f"Fuel cell stack mass:    {result['fuel_cell_stack_mass_kg']:.3f} kg")
     print(f"Battery buffer power:    {result['battery_buffer_power_w']:.1f} W")
     print(f"Battery buffer mass:     {result['battery_mass_kg']:.3f} kg")
+    if "num_batteries" in result:
+        print(f"Battery cells needed:    {result['num_batteries']}x {result['battery_name']}")
     print(f"Hydrogen mass needed:    {result['hydrogen_mass_kg']*1000:.1f} g")
     if "num_cylinders" in result:
         print(f"Cylinder:                {result['num_cylinders']}x {result['cylinder_name']}")
@@ -107,7 +136,7 @@ def plot_comparison(results, save_path="notebooks/fuel_cell_comparison.png"):
     tank_mass = [r["tank_system_mass_kg"] for r in results]
     bop_mass = [r["balance_of_plant_mass_kg"] for r in results]
 
-    fig, ax = plt.subplots(figsize=(8, 5.5))
+    fig, ax = plt.subplots(figsize=(10, 6))
     x = range(len(names))
 
     bottom = [0] * len(names)
@@ -119,8 +148,10 @@ def plot_comparison(results, save_path="notebooks/fuel_cell_comparison.png"):
     for i, total in enumerate(bottom):
         ax.text(i, total + 0.05, f"{total:.2f} kg", ha="center", fontweight="bold")
 
+    ax.set_ylim(0, max(bottom) * 1.15)
+
     ax.set_xticks(list(x))
-    ax.set_xticklabels(names)
+    ax.set_xticklabels(names, rotation=15, ha="right", fontsize=9)
     ax.set_ylabel("Mass (kg)")
     ax.set_title("Fuel Cell Candidate Comparison: System Mass Breakdown")
     ax.legend()
@@ -145,7 +176,7 @@ if __name__ == "__main__":
         "horizon_fcs_ul500", peak_power_w, total_energy_wh,
         use_rated_power_cap=True, num_units=1,
         label_suffix=" (1x, rated-power capped)",
-        cylinder_key="xfiber_s2", mass_budget_kg=4.0,
+        cylinder_key="xfiber_s2", mass_budget_kg=4.0, battery_key="ovonic_150c_1400mah",
     )
     print_result(result_1)
     results.append(result_1)
@@ -155,7 +186,7 @@ if __name__ == "__main__":
         "horizon_fcs_ul500", peak_power_w, total_energy_wh,
         use_rated_power_cap=True, num_units=2,
         label_suffix=" (2x parallel)",
-        cylinder_key="xfiber_s2", mass_budget_kg=4.0,
+        cylinder_key="xfiber_s2", mass_budget_kg=4.0, battery_key="ovonic_150c_1400mah",
     )
     print_result(result_2)
     results.append(result_2)
@@ -165,7 +196,7 @@ if __name__ == "__main__":
         "ie_s800", peak_power_w, total_energy_wh,
         use_rated_power_cap=True, num_units=1,
         label_suffix=" (1x, rated-power capped)",
-        cylinder_key="xfiber_s2", mass_budget_kg=4.0,
+        cylinder_key="xfiber_s2", mass_budget_kg=4.0, battery_key="ovonic_150c_1400mah",
     )
     print_result(result_3)
     results.append(result_3)
