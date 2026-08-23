@@ -22,6 +22,46 @@ BATTERY_PROFILES = {
         "specific_energy_wh_per_kg": (1.4 * 22.2) / 0.227,  # ~137 Wh/kg
         "specific_power_w_per_kg": (1.4 * 150 * 22.2) / 0.227,  # ~20,536 W/kg (theoretical max)
         "connector": "XT60",
+        "url": "https://rcdrone.top/de/products/ovonic-150c-racing-lipo-battery",
+    },
+    "cnhl_130c_1300mah": {
+        "name": "CNHL Black Series V2.0 6S 1300mAh 130C",
+        "capacity_ah": 1.3,
+        "voltage_v": 22.2,
+        "discharge_rate_c": 130,
+        "mass_kg": 0.223,
+        "max_continuous_current_a": 1.3 * 130,  # 169 A
+        "max_continuous_power_w": 1.3 * 130 * 22.2,
+        "specific_energy_wh_per_kg": (1.3 * 22.2) / 0.223,
+        "specific_power_w_per_kg": (1.3 * 130 * 22.2) / 0.223,
+        "connector": "XT60",
+        "url": "https://www.racedayquads.com/products/cnhl-black-series-v2-0-1300mah-22-2v-130c-6s-lipo-battery-xt60",
+    },
+    "gnb_80c_550mah": {
+        "name": "Gaoneng GNB 6S 550mAh 80/160C",
+        "capacity_ah": 0.55,
+        "voltage_v": 22.2,
+        "discharge_rate_c": 80,
+        "mass_kg": 0.102,
+        "max_continuous_current_a": 0.55 * 80,  # 44 A
+        "max_continuous_power_w": 0.55 * 80 * 22.2,
+        "specific_energy_wh_per_kg": (0.55 * 22.2) / 0.102,
+        "specific_power_w_per_kg": (0.55 * 80 * 22.2) / 0.102,
+        "connector": "XT30",
+        "url": "https://pyrodrone.com/products/gaoneng-gnb-22-2v-550mah-80-160c-6s-lipo-battery-jst-xt30",
+    },
+    "gnb_120c_930mah": {
+        "name": "Gaoneng GNB 6S 930mAh 120C",
+        "capacity_ah": 0.93,
+        "voltage_v": 22.2,
+        "discharge_rate_c": 120,
+        "mass_kg": 0.148,
+        "max_continuous_current_a": 0.93 * 120,  # ~112 A
+        "max_continuous_power_w": 0.93 * 120 * 22.2,
+        "specific_energy_wh_per_kg": (0.93 * 22.2) / 0.148,
+        "specific_power_w_per_kg": (0.93 * 120 * 22.2) / 0.148,
+        "connector": "XT30",
+        "url": "https://www.gaoneng.shop/products/gaoneng-gnb-6s-22.2v-930mah-120c-xt30-connector-lipo-battery",
     },
 }
 

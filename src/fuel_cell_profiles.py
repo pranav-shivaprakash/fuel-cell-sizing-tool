@@ -33,6 +33,16 @@ FUEL_CELL_PROFILES = {
         "voltage_range_v": (25, 50),
         "notes": "Includes redundant hybrid battery architecture natively.",
     },
+    "horizon_ul1000": {
+        "name": "Horizon UL-1000",
+        "rated_power_w": 1000,
+        "mass_kg": 3.070,  # measured: stack+housing+blowers+valves (2266g) + controller+cables+LCD+dissipation plate (728g) + tubes/screws/fittings/H2 connectors (76g)
+        "specific_power_w_per_kg": 1000 / 3.070,
+        "system_efficiency": 0.40,  # H-1000 datasheet: 40% at 43V (same family as UL500)
+        "bop_fraction_of_stack": 0.0,  # tubes/fittings/H2 connectors already included in mass_kg above
+        "voltage_range_v": (39, 69),
+        "notes": "Larger sibling of the UL500. Mass includes full accessory kit (tubes, fittings, H2 connectors).",
+    },
 }
 
 

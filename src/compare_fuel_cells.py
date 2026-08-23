@@ -105,6 +105,25 @@ def size_with_profile(profile_key, peak_power_w, total_energy_wh,
     return result
 
 
+def size_with_best_cylinder(profile_key, peak_power_w, total_energy_wh, mass_budget_kg,
+                             preferred_cylinder_key="xfiber_s3", fallback_cylinder_key="xfiber_s2",
+                             **kwargs):
+    """
+    Try the preferred (larger) cylinder first; if the resulting system exceeds
+    the mass budget, fall back to the smaller cylinder instead. Larger
+    cylinders carry more hydrogen margin for a given mission, so they're
+    preferred whenever the mass budget allows it.
+    """
+    result = size_with_profile(profile_key, peak_power_w, total_energy_wh,
+                                mass_budget_kg=mass_budget_kg,
+                                cylinder_key=preferred_cylinder_key, **kwargs)
+    if result["total_system_mass_kg"] > mass_budget_kg:
+        result = size_with_profile(profile_key, peak_power_w, total_energy_wh,
+                                    mass_budget_kg=mass_budget_kg,
+                                    cylinder_key=fallback_cylinder_key, **kwargs)
+    return result
+
+
 def print_result(result):
     print(f"\n--- {result['fuel_cell_name']} ---")
     print(f"Fuel cell stack power required: {result['fuel_cell_stack_power_w']:.1f} W "
@@ -173,34 +192,35 @@ if __name__ == "__main__":
 
     results = []
 
-    # Config 1: single UL500, capped at its real 500W rating -> bigger battery buffer covers the rest
-    result_1 = size_with_profile(
-        "horizon_fcs_ul500", peak_power_w, total_energy_wh,
+    # Config 1: single UL500 (500W cap) -> 832W buffer -> needs >=1249mAh
+    result_1 = size_with_best_cylinder(
+        "horizon_fcs_ul500", peak_power_w, total_energy_wh, mass_budget_kg=4.0,
         use_rated_power_cap=True, num_units=1,
         label_suffix=" (1x, rated-power capped)",
-        cylinder_key="xfiber_s2", mass_budget_kg=4.0, battery_key="ovonic_150c_1400mah",
+        battery_key="cnhl_130c_1300mah",
     )
     print_result(result_1)
     results.append(result_1)
 
-    # Config 2: two UL500s in parallel, capped at 2x500W = 1000W combined
-    result_2 = size_with_profile(
-        "horizon_fcs_ul500", peak_power_w, total_energy_wh,
-        use_rated_power_cap=True, num_units=2,
-        label_suffix=" (2x parallel)",
-        cylinder_key="xfiber_s2", mass_budget_kg=4.0, battery_key="ovonic_150c_1400mah",
+    # Config 2: IE S800 (800W cap) -> 532W buffer -> needs >=799mAh
+    result_2 = size_with_best_cylinder(
+        "ie_s800", peak_power_w, total_energy_wh, mass_budget_kg=4.0,
+        use_rated_power_cap=True, num_units=1,
+        label_suffix=" (1x, rated-power capped)",
+        battery_key="gnb_120c_930mah",
     )
     print_result(result_2)
     results.append(result_2)
 
-    # Config 3: IE S800, capped at its real 800W rating
-    result_3 = size_with_profile(
-        "ie_s800", peak_power_w, total_energy_wh,
+    # Config 3: single UL-1000 (1000W cap) -> 332W buffer -> needs >=498mAh
+    result_3 = size_with_best_cylinder(
+        "horizon_ul1000", peak_power_w, total_energy_wh, mass_budget_kg=4.0,
         use_rated_power_cap=True, num_units=1,
         label_suffix=" (1x, rated-power capped)",
-        cylinder_key="xfiber_s2", mass_budget_kg=4.0, battery_key="ovonic_150c_1400mah",
+        battery_key="gnb_80c_550mah",
     )
     print_result(result_3)
     results.append(result_3)
 
     plot_comparison(results, save_path="../notebooks/fuel_cell_comparison.png")
+    
