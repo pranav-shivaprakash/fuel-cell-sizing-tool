@@ -10,8 +10,16 @@ stack, hydrogen tank, or battery buffer, you need to know how much power
 is needed, and for how long.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
+# Resolve data/ relative to THIS FILE's location on disk, not the
+# directory the script happens to be launched from -- so
+# `python src/mission_profile.py` works the same whether run from the
+# repo root or from inside src/.
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
 def constant_power_mission(duration_hours, power_w, timestep_s=60):
@@ -112,5 +120,7 @@ if __name__ == "__main__":
     print(f"Total energy required:  {mission_energy_wh(mission):.1f} Wh")
     print(f"Peak power demand:      {mission_peak_power_w(mission):.0f} W")
 
-    mission.to_csv("data/mission_profiles.csv", index=False)
-    print("\nSaved mission profile to data/mission_profiles.csv")
+    DATA_DIR.mkdir(exist_ok=True)
+    output_path = DATA_DIR / "mission_profiles.csv"
+    mission.to_csv(output_path, index=False)
+    print(f"\nSaved mission profile to {output_path}")

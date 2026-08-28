@@ -14,12 +14,21 @@ Two trade-offs explored:
      hydrogen's mass advantage over pure-battery systems shows up.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 from mission_profile import multi_phase_mission, mission_energy_wh, mission_peak_power_w
 from fuel_cell_sizing import size_full_system, size_battery_only_system
+
+# Resolve notebooks/ relative to THIS FILE's location on disk, not the
+# directory the script happens to be launched from -- so
+# `python src/plot_results.py` works the same whether run from the repo
+# root or from inside src/.
+NOTEBOOKS_DIR = Path(__file__).resolve().parent.parent / "notebooks"
+NOTEBOOKS_DIR.mkdir(exist_ok=True)
 
 
 def sweep_stack_fraction(peak_power_w, total_energy_wh, fractions=None):
@@ -39,7 +48,9 @@ def sweep_stack_fraction(peak_power_w, total_energy_wh, fractions=None):
     return pd.DataFrame(rows)
 
 
-def plot_stack_fraction_tradeoff(df, save_path="stack_fraction_tradeoff.png"):
+def plot_stack_fraction_tradeoff(df, save_path=None):
+    if save_path is None:
+        save_path = NOTEBOOKS_DIR / "stack_fraction_tradeoff.png"
     """Plot how mass splits between fuel cell, battery, and tank as stack sizing changes."""
     fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -94,7 +105,9 @@ def sweep_mission_duration(cruise_powers_w, cruise_hours_list):
     return pd.DataFrame(rows)
 
 
-def plot_duration_tradeoff(df, save_path="duration_tradeoff.png"):
+def plot_duration_tradeoff(df, save_path=None):
+    if save_path is None:
+        save_path = NOTEBOOKS_DIR / "duration_tradeoff.png"
     """Plot how total system mass scales with mission duration."""
     fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -132,10 +145,10 @@ if __name__ == "__main__":
 
     print("=== Sweep 1: Fuel cell stack sizing trade-off ===")
     df_stack = sweep_stack_fraction(peak_power_w, total_energy_wh)
-    plot_stack_fraction_tradeoff(df_stack, save_path="../notebooks/stack_fraction_tradeoff.png")
+    plot_stack_fraction_tradeoff(df_stack)
 
     print("\n=== Sweep 2: Mission duration scaling ===")
     # Using the real cruise power (222W = 10A x 22.2V); sweeping cruise duration
     # from 30 min to 4 hours to see how far this system could fly with a bigger tank
     df_duration = sweep_mission_duration(cruise_powers_w=222, cruise_hours_list=np.arange(0.5, 4.5, 0.5))
-    plot_duration_tradeoff(df_duration, save_path="../notebooks/duration_tradeoff.png")
+    plot_duration_tradeoff(df_duration)
